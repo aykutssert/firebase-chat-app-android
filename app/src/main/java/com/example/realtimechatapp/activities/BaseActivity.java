@@ -11,8 +11,6 @@ import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.FirebaseFirestore;
 
 public class BaseActivity extends AppCompatActivity {
-
-
     private DocumentReference documentReference;
     @Override
     protected void onCreate(Bundle savedInstanceState) {

@@ -10,11 +10,8 @@ import android.util.Base64;
 import android.util.Log;
 import android.view.View;
 import android.widget.Toast;
-
-
 import com.example.realtimechatapp.adapters.RecentConversationsAdapter;
 import com.example.realtimechatapp.databinding.ActivityMainBinding;
-import com.example.realtimechatapp.firebase.MessagingService;
 import com.example.realtimechatapp.listeners.ConversionListener;
 import com.example.realtimechatapp.models.ChatMessage;
 import com.example.realtimechatapp.models.User;
@@ -27,9 +24,8 @@ import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.QuerySnapshot;
 import com.google.firebase.messaging.FirebaseMessaging;
-
 import java.util.ArrayList;
-
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 
@@ -40,6 +36,7 @@ public class MainActivity extends BaseActivity implements ConversionListener {
     private List<ChatMessage> conversations;
     private RecentConversationsAdapter conversationsAdapter;
     private FirebaseFirestore db;
+    private String covId;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -52,7 +49,6 @@ public class MainActivity extends BaseActivity implements ConversionListener {
         getToken();
         setListeners();
         listenConversations();
-
     }
     private void listenConversations(){
         db.collection(Constans.KEY_COLLECTION_CONVERSATIONS)
@@ -68,8 +64,11 @@ public class MainActivity extends BaseActivity implements ConversionListener {
           return;
       }
       if(value!=null){
+
           for(DocumentChange documentChange: value.getDocumentChanges()){
               if(documentChange.getType() == DocumentChange.Type.ADDED){
+                    Log.d("eklendi","");
+                    covId = documentChange.getDocument().getId();
                   String senderId = documentChange.getDocument().getString(Constans.KEY_SENDER_ID);
                   String receiverId = documentChange.getDocument().getString(Constans.KEY_RECEIVER_ID);
                   ChatMessage chatMessage = new ChatMessage();
@@ -79,6 +78,7 @@ public class MainActivity extends BaseActivity implements ConversionListener {
                       chatMessage.conversionImage = documentChange.getDocument().getString(Constans.KEY_RECEIVER_IMAGE);
                       chatMessage.ConversionName = documentChange.getDocument().getString(Constans.KEY_RECEIVER_NAME);
                       chatMessage.conversionId = documentChange.getDocument().getString(Constans.KEY_RECEIVER_ID);
+
                   }
                   else{
                       chatMessage.conversionImage = documentChange.getDocument().getString(Constans.KEY_SENDER_IMAGE);
@@ -87,15 +87,19 @@ public class MainActivity extends BaseActivity implements ConversionListener {
                   }
                   chatMessage.message = documentChange.getDocument().getString(Constans.KEY_LAST_MESSAGE);
                   chatMessage.dateObject = documentChange.getDocument().getDate(Constans.KEY_TIMESTAMP);
+                  chatMessage.isRead = documentChange.getDocument().getString("receiverRead");
+                  Log.d("isRead",""+chatMessage.isRead);
                   conversations.add(chatMessage);
               }
               else if(documentChange.getType() == DocumentChange.Type.MODIFIED){
+                  Log.d("modifiye","");
                   for (int i=0;i<conversations.size();i++){
                       String senderId = documentChange.getDocument().getString(Constans.KEY_SENDER_ID);
                       String receiverId = documentChange.getDocument().getString(Constans.KEY_RECEIVER_ID);
                       if(conversations.get(i).senderId.equals(senderId) && conversations.get(i).receiverId.equals(receiverId)){
                           conversations.get(i).message = documentChange.getDocument().getString(Constans.KEY_LAST_MESSAGE);
                           conversations.get(i).dateObject = documentChange.getDocument().getDate(Constans.KEY_TIMESTAMP);
+                          conversations.get(i).isRead = "false";
                           break;
                       }
                   }
@@ -131,22 +135,33 @@ public class MainActivity extends BaseActivity implements ConversionListener {
         Toast.makeText(getApplicationContext(),message,Toast.LENGTH_SHORT).show();
 
     }
-    private void getToken(){
-        FirebaseMessaging.getInstance().getToken().addOnSuccessListener(this::updateToken);
+    private void getToken() {
+        FirebaseMessaging.getInstance().getToken()
+                .addOnSuccessListener(token -> {
+                    updateToken(token);
+                    Log.d("MainFcm", "FCM Token: " + token);
+                })
+                .addOnFailureListener(e -> Log.e("FCM", "Failed to get FCM token", e));
     }
-    private void updateToken(String token){
-        preferenceManager.putString(Constans.KEY_FCM_TOKEN,token);
-        FirebaseFirestore database =  FirebaseFirestore.getInstance();
-        DocumentReference documentReference =
-                database.collection(Constans.KEY_COLLECTION_USERS).document(
-                        preferenceManager.getString(Constans.KEY_USER_ID)
-                );
-        documentReference.update(Constans.KEY_FCM_TOKEN,token)
-
-                .addOnFailureListener(fail -> showToast("Unable to update token"));
 
 
+    private void updateToken(String token) {
+        preferenceManager.putString(Constans.KEY_FCM_TOKEN, token);
+        FirebaseFirestore database = FirebaseFirestore.getInstance();
+        String userId = preferenceManager.getString(Constans.KEY_USER_ID);
+
+        if (userId == null || userId.isEmpty()) {
+            showToast("User ID is missing");
+            return;
+        }
+        DocumentReference documentReference = database.collection(Constans.KEY_COLLECTION_USERS)
+                .document(userId);
+
+        documentReference.update(Constans.KEY_FCM_TOKEN, token)
+                .addOnSuccessListener(aVoid -> {})
+                .addOnFailureListener(e -> {});
     }
+
     private void signOut(){
         showToast("signing out...");
         FirebaseFirestore database = FirebaseFirestore.getInstance();
@@ -164,12 +179,18 @@ public class MainActivity extends BaseActivity implements ConversionListener {
                                 .addOnFailureListener(e -> showToast("unable to sign out"));
 
     }
-
     @Override
     public void onConversionClicked(User user) {
+        Log.d("tıkladık","");
+        DocumentReference documentReference = db.collection(Constans.KEY_COLLECTION_CONVERSATIONS).document(covId);
+        documentReference.update(
+                    "receiverRead","true"
+        );
         Intent intent = new Intent(getApplicationContext(),ChatActivity.class);
         intent.putExtra(Constans.KEY_USER,user);
         startActivity(intent);
+        finish();
+
 
     }
 }

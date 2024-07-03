@@ -3,7 +3,9 @@ package com.example.realtimechatapp.adapters;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.util.Base64;
+import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.View;
 import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
@@ -19,9 +21,11 @@ import java.util.List;
 public class RecentConversationsAdapter extends RecyclerView.Adapter<RecentConversationsAdapter.ConversionViewHolder> {
     private final List<ChatMessage> chatMessages;
     private final ConversionListener conversionListener;
+
     public RecentConversationsAdapter(List<ChatMessage> chatMessages,ConversionListener conversionListener) {
         this.chatMessages = chatMessages;
         this.conversionListener = conversionListener;
+
     }
 
     @NonNull
@@ -49,6 +53,12 @@ public class RecentConversationsAdapter extends RecyclerView.Adapter<RecentConve
             binding = itemContainerRecentConversationBinding;
         }
         void setData(ChatMessage chatMessage){
+            Log.d("setDatayaGeldik",":"+chatMessage.isRead);
+            if ("true".equals(chatMessage.isRead)) {
+                binding.conversationNoti.setVisibility(View.GONE);
+            } else {
+                binding.conversationNoti.setVisibility(View.VISIBLE);
+            }
             binding.imageProfile.setImageBitmap(getConversionImage(chatMessage.conversionImage));
             binding.textName.setText(chatMessage.ConversionName);
             binding.textRecentMessage.setText(chatMessage.message);

@@ -7,6 +7,8 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.MediaStore;
 import android.util.Base64;
 import android.util.Log;
@@ -15,11 +17,15 @@ import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
 
 import com.example.realtimechatapp.adapters.ChatAdapter;
 import com.example.realtimechatapp.databinding.ActivityChatBinding;
 import com.example.realtimechatapp.models.ChatMessage;
 import com.example.realtimechatapp.models.User;
+import com.example.realtimechatapp.network.ApiClient;
+import com.example.realtimechatapp.network.ApiService;
+import com.example.realtimechatapp.utils.AccessToken;
 import com.example.realtimechatapp.utils.Constans;
 import com.example.realtimechatapp.utils.ImageEncoder;
 import com.example.realtimechatapp.utils.PreferenceManager;
@@ -30,8 +36,10 @@ import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.EventListener;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.QuerySnapshot;
+import com.google.gson.JsonObject;
 
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -41,6 +49,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+
+import okhttp3.ResponseBody;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 public class ChatActivity extends BaseActivity {
 
@@ -67,6 +80,26 @@ public class ChatActivity extends BaseActivity {
         loadReceiverDetails();
         init();
         listenMessages();
+        preferenceManager.putString("screen","chat");
+
+        new Thread( ()->{
+            AccessToken accessToken = new AccessToken();
+            final String token = accessToken.getAccessToken();
+            new Handler(Looper.getMainLooper()).post(()->{
+                if(token!=null){
+                    Constans.REMOTE_ACCESS_TOKEN = token;
+                }
+                else {
+                    Log.e("Access Token: ","Failed to obtain access token");
+                }
+            });
+        }).start();
+
+        DocumentReference documentReference = db.collection(Constans.KEY_COLLECTION_USERS)
+                .document(preferenceManager.getString(Constans.KEY_USER_ID));
+
+        documentReference.update("screen", "chat")
+                .addOnSuccessListener(v ->{});
 
     }
     private void init(){
@@ -95,13 +128,8 @@ public class ChatActivity extends BaseActivity {
 
         db.collection(Constans.KEY_COLLECTION_CHAT)
                 .add(message)
-                .addOnSuccessListener(documentReference -> {
-                    Log.d("Success", "Mesaj gönderildi.");
-                })
-                .addOnFailureListener(e -> {
-                    Toast.makeText(getApplicationContext(), "Mesaj gönderilirken hata oluştu: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                    Log.e("FAIL", "Mesaj gönderilirken hata: " + e.getMessage());
-                });
+                .addOnSuccessListener(documentReference -> Log.d("Success", "Mesaj gönderildi."))
+                .addOnFailureListener(e -> {});
     }
 
     private final ActivityResultLauncher<Intent> pickImage = registerForActivityResult(
@@ -159,11 +187,94 @@ public class ChatActivity extends BaseActivity {
             conversion.put(Constans.KEY_RECEIVER_IMAGE,receiverUser.image);
             conversion.put(Constans.KEY_LAST_MESSAGE,binding.inputMessage.getText().toString());
             conversion.put(Constans.KEY_TIMESTAMP,new Date());
+            if(isReceiverOnline) conversion.put("receiverRead","true");
+            if(!isReceiverOnline) conversion.put("receiverRead","false");
             addConversion(conversion);
+        }
+
+        if(!isReceiverOnline){
+            try{
+
+                String accestoken,fcmToken;
+                accestoken = Constans.REMOTE_ACCESS_TOKEN;
+                fcmToken = receiverUser.fcmToken;
+                sendNotification(fcmToken,accestoken,binding.inputMessage.getText().toString());
+            }catch (Exception e){
+                showToast(e.getMessage());
+            }
         }
         binding.inputMessage.setText(null);
 
     }
+    //SHOW TOAST
+    private void showToast(String message){
+
+        Toast.makeText(getApplicationContext(),message,Toast.LENGTH_SHORT).show();
+
+    }
+    private void sendNotification(String fcmToken, String accessToken,String message) {
+        // Data içeren JSON objesi oluşturma
+        JsonObject dataJson = new JsonObject();
+        dataJson.addProperty("title", "Test Notification");
+        dataJson.addProperty("body", "This is a test notification");
+        dataJson.addProperty(Constans.KEY_NAME, preferenceManager.getString(Constans.KEY_NAME));
+        dataJson.addProperty(Constans.KEY_MESSAGE, message);
+        dataJson.addProperty(Constans.KEY_FCM_TOKEN, preferenceManager.getString(Constans.KEY_FCM_TOKEN));
+        dataJson.addProperty(Constans.KEY_USER_ID,preferenceManager.getString(Constans.KEY_USER_ID));
+
+        // Mesaj JSON objesi oluşturma
+        JsonObject messageJson = new JsonObject();
+        messageJson.addProperty("token", fcmToken);
+        messageJson.add("data", dataJson);  // `data` alanını kullanarak
+
+        // Ana JSON objesi oluşturma
+        JsonObject mainJson = new JsonObject();
+        mainJson.add("message", messageJson);
+
+        // ApiService üzerinden isteği gönderme
+        ApiService apiService = ApiClient.getClient().create(ApiService.class);
+        String messageBody = mainJson.toString();
+
+        Call<ResponseBody> call = apiService.sendMessage(
+                "Bearer " + accessToken,
+                "application/json",
+                messageBody
+        );
+
+        // JSON objesini loglama
+        Log.d("JSON Request", messageBody);
+
+        call.enqueue(new Callback<ResponseBody>() {
+            @Override
+            public void onResponse(@NonNull Call<ResponseBody> call, @NonNull Response<ResponseBody> response) {
+                if (response.isSuccessful()) {
+                    try {
+                        assert response.body() != null;
+                        String responseBody = response.body().string();
+                        Log.d("Response Success", "Response Body: " + responseBody);
+                        showToast("Notification sent successfully");
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                } else {
+                    showToast("Error: " + response.code());
+                    try {
+                        assert response.errorBody() != null;
+                        Log.d("Response Error", "Message: " + response.message() + ", Error Body: " + response.errorBody().string());
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+
+            @Override
+            public void onFailure(@NonNull Call<ResponseBody> call, @NonNull Throwable t) {
+                showToast("Failure: " + t.getMessage());
+                Log.e("Network Failure", t.getMessage(), t);
+            }
+        });
+    }
+
 
 
     private void listenOnlineReceiver(){
@@ -180,6 +291,11 @@ public class ChatActivity extends BaseActivity {
                     isReceiverOnline = online == 1;
                 }
                 receiverUser.fcmToken = value.getString(Constans.KEY_FCM_TOKEN);
+                if(receiverUser.image == null){
+                    receiverUser.image = value.getString(Constans.KEY_IMAGE);
+                    chatAdapter.setReceiverProfileImage(getBitmapFromEncodedString(receiverUser.image));
+                    chatAdapter.notifyItemRangeChanged(0,chatMessageList.size());
+                }
             }
             if(isReceiverOnline){
                 binding.textAvailability.setVisibility(View.VISIBLE);
@@ -192,8 +308,13 @@ public class ChatActivity extends BaseActivity {
     }
 
     private Bitmap getBitmapFromEncodedString(String encodedImage){
-        byte[] bytes = Base64.decode(encodedImage,Base64.DEFAULT);
-        return BitmapFactory.decodeByteArray(bytes,0, bytes.length);
+        if(encodedImage!=null){
+            byte[] bytes = Base64.decode(encodedImage,Base64.DEFAULT);
+            return BitmapFactory.decodeByteArray(bytes,0, bytes.length);
+        }
+        else{
+            return null;
+        }
     }
     private void loadReceiverDetails(){
         receiverUser = (User) getIntent().getSerializableExtra(Constans.KEY_USER);
@@ -249,7 +370,7 @@ public class ChatActivity extends BaseActivity {
       }
     };
     private void setListeners(){
-        binding.imageBack.setOnClickListener(v -> startActivity(new Intent(getApplicationContext(),UsersActivity.class)));
+        binding.imageBack.setOnClickListener(v -> startActivity(new Intent(getApplicationContext(),MainActivity.class)));
         binding.layoutSend.setOnClickListener(v -> sendMessage());
         binding.layoutSendImage.setOnClickListener(v ->{
             Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
@@ -266,10 +387,26 @@ public class ChatActivity extends BaseActivity {
                 .addOnSuccessListener(v -> conversionId = v.getId());
     }
     private void updateConversion(String message){
+
+
+
         DocumentReference documentReference = db.collection(Constans.KEY_COLLECTION_CONVERSATIONS).document(conversionId);
         documentReference.update(
                 Constans.KEY_LAST_MESSAGE,message,Constans.KEY_TIMESTAMP,new Date()
         );
+
+        if(isReceiverOnline) {
+
+            documentReference.update(
+                    "receiverRead","true"
+            );
+        }
+        if(!isReceiverOnline) {
+
+            documentReference.update(
+                    "receiverRead","false"
+            );
+        }
     }
     private void checkForConversion(){
         if(chatMessageList.size() !=0){

@@ -23,7 +23,7 @@ public class SignInActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         preferenceManager = new PreferenceManager(getApplicationContext());
-        /*if(preferenceManager.getBoolean(Constans.KEY_IS_SIGNED_IN)){
+        if(preferenceManager.getBoolean(Constans.KEY_IS_SIGNED_IN)){
             long signInTime = preferenceManager.getLong(Constans.KEY_SIGN_IN_TIME);
             long currentTime = System.currentTimeMillis();
             long sessionDuration = 24 * 60  * 60 * 1000; //24 hours (1 * 60 * 1000 = 1 dakika)
@@ -37,11 +37,12 @@ public class SignInActivity extends AppCompatActivity {
                 showToast("Session expired. Please sign in again.");
             }
 
-        }*/
+        }
         activitySignInBinding = ActivitySignInBinding.inflate(getLayoutInflater());
         setContentView(activitySignInBinding.getRoot());
 
         setListeners();
+
     }
     private void setListeners(){
         activitySignInBinding.textCreateNewAccount.setOnClickListener(v ->
@@ -116,22 +117,4 @@ public class SignInActivity extends AppCompatActivity {
         }
     }
 
-    //We will add dummy data to the cloud firestore database
-    //in order to check whether the cloud firestore is set up
-    //correctly or nor
-    /*private void addDataToFireStore(){
-        FirebaseFirestore database = FirebaseFirestore.getInstance();
-        HashMap<String,Object> data = new HashMap<>();
-        data.put("firstName","Aykut");
-        data.put("lastName","Sert");
-        database.collection("users")
-                .add(data)
-                .addOnSuccessListener(ref -> {
-                            Toast.makeText(getApplicationContext(), "Data Inserted", Toast.LENGTH_SHORT).show();
-                        }
-                        )
-                .addOnFailureListener(exception ->{
-                    Toast.makeText(getApplicationContext(), exception.getMessage(), Toast.LENGTH_SHORT).show();
-                });
-    }*/
 }

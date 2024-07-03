@@ -1,3 +1,5 @@
+@file:Suppress("UNUSED_EXPRESSION")
+
 import com.android.build.api.dsl.Packaging
 
 plugins {
@@ -8,6 +10,12 @@ plugins {
 android {
     namespace = "com.example.realtimechatapp"
     compileSdk = 34
+
+    packaging {
+        resources {
+            excludes.add("META-INF/DEPENDENCIES")
+        }
+    }
 
     defaultConfig {
         applicationId = "com.example.realtimechatapp"
@@ -32,7 +40,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
-    buildFeatures{
+    buildFeatures {
         viewBinding = true
     }
 
@@ -41,10 +49,12 @@ android {
 
 dependencies {
 
+
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
-
+    implementation("com.google.code.gson:gson:2.10.1")
+    implementation ("com.squareup.retrofit2:converter-gson:2.9.0")
     // https://github.com/intuit/sdp
     implementation ("com.intuit.sdp:sdp-android:1.0.6")
 
@@ -55,7 +65,7 @@ dependencies {
     implementation ("com.makeramen:roundedimageview:2.3.0")
     implementation("com.google.firebase:firebase-messaging:24.0.0")
     implementation("com.google.firebase:firebase-firestore:25.0.0")
-
+    implementation("com.google.auth:google-auth-library-oauth2-http:1.19.0")
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-scalars:2.9.0")
     testImplementation("junit:junit:4.13.2")

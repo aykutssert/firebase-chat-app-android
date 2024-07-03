@@ -119,7 +119,6 @@
         android:layout_width="@dimen/_40sdp"
         android:layout_height="@dimen/_40sdp"
         android:layout_marginEnd="@dimen/_16sdp"
-
         android:layout_marginBottom="@dimen/_12sdp"
         android:background="@drawable/background_chat_input"
         app:layout_constraintBottom_toBottomOf="parent"
